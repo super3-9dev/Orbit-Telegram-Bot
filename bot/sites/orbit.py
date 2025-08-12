@@ -184,14 +184,15 @@ async def _scrape_orbit_page() -> Dict[str, Any] | None:
                 from bs4 import BeautifulSoup
                 import re
                 def _nums_from(node):
+                    print(node, "===================>")
                     text = node.get_text(" ", strip=True)
+                    print(text, "===================>")
                     return [float(m) for m in re.findall(r"\d+(?:\.\d+)?", text)]
 
                 rows_objects: list[dict] = []
                 for container_html in rows_html_list or []:
                     soup = BeautifulSoup(container_html, "html.parser")
                     for row in soup.select('div.biab_group-markets-table-row[data-market-prices="true"]'):
-                        print(row, "===================>")
                         
                         teams = row.select('.biab_market-title-team-names p[title]')
                         if len(teams) < 2:
@@ -204,17 +205,24 @@ async def _scrape_orbit_page() -> Dict[str, Any] | None:
 
                         # First six numeric values in document order
                         nums: list[float] = []
-                        for el in row.select('.biab_bet-content, .betContentCellMarket, .betContentContainer'):
-                            nums += _nums_from(el)
-                            if len(nums) >= 6:
-                                break
-
-                        obj = {'teams': f'{home} VS {away}'}
-                        for i, val in enumerate(nums[:6], start=1):
-                            obj[str(i)] = val
-                        if len(sel_ids) == 3:
-                            obj.update({'s1': sel_ids[0], 'sx': sel_ids[1], 's2': sel_ids[2]})
-                        rows_objects.append(obj)
+                        cnt: int = 2
+                        for el in row.select('.styles_betContent__wrapper__25jEo'):
+                            values = el.select('div.styles_contents__Kf8LQ')[1]
+                            # Get the tag that is included in this tag
+                            tag_included = values.select('div.betContentCellMarket')
+                            print(tag_included, "===================>")
+                            # if (cnt % 2) != 0:
+                            #     continue
+                            # cnt += 1
+                            # nums += _nums_from(el)
+                            # if len(nums) >= 6:
+                            #     break
+                        # obj = {'teams': f'{home} VS {away}'}
+                        # for i, val in enumerate(nums[:6], start=1):
+                        #     obj[str(i)] = val
+                        # if len(sel_ids) == 3:
+                        #     obj.update({'s1': sel_ids[0], 'sx': sel_ids[1], 's2': sel_ids[2]})
+                        # rows_objects.append(obj)
 
                 # print('[ORBIT] sample object:', rows_objects[0] if rows_objects else None)
             except Exception as e:
