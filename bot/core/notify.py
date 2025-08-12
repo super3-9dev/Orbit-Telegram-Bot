@@ -5,8 +5,7 @@ import httpx
 from datetime import datetime
 import pytz
 
-TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
-TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
+# Read TZ at import; read token/chat at send-time to avoid empty values from early import
 TZ = os.getenv("TZ", "Asia/Tokyo")
 
 def ts(dt) -> str:
@@ -17,13 +16,15 @@ def ts(dt) -> str:
         return dt.strftime("%Y-%m-%d %H:%M:%S")
 
 async def send_telegram(text: str):
-    if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
+    bot_token = os.getenv("TELEGRAM_BOT_TOKEN", "")
+    chat_id = os.getenv("TELEGRAM_CHAT_ID", "")
+    if not bot_token or not chat_id:
         print("[TELEGRAM DISABLED]", text)
         return
-    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+    url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
     async with httpx.AsyncClient(timeout=10) as client:
         await client.post(url, json={
-            "chat_id": TELEGRAM_CHAT_ID,
+            "chat_id": chat_id,
             "text": text
         })
 
