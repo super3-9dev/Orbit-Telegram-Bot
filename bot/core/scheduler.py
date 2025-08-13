@@ -20,7 +20,7 @@ async def run_cycle(dedupe: DedupeCache):
     # Collect snapshots from all sources
     snapshots: List[MarketSnapshot] = []
     # Orbit (LAY)
-    snapshots += await fetch_orbit_snapshots()
+    # snapshots += await fetch_orbit_snapshots()
     # Comparator sites
     snapshots += await fetch_golbet724_snapshots()
     # Compare and notify
