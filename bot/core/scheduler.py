@@ -14,7 +14,7 @@ ALERT_DEDUPE_MINUTES = int(os.getenv("ALERT_DEDUPE_MINUTES", "10"))
 DEMO = os.getenv("DEMO", "1") == "1"
 
 from ..sites.orbit import fetch_orbit_snapshots
-from ..sites.example import fetch_example_snapshots
+from ..sites.example import fetch_golbet724_snapshots
 
 async def run_cycle(dedupe: DedupeCache):
     # Collect snapshots from all sources
@@ -22,7 +22,7 @@ async def run_cycle(dedupe: DedupeCache):
     # Orbit (LAY)
     snapshots += await fetch_orbit_snapshots()
     # Comparator sites
-    snapshots += await fetch_example_snapshots()
+    snapshots += await fetch_golbet724_snapshots()
     # Compare and notify
     now = datetime.now(timezone.utc)
     for m, orbit_q, other_q in find_opportunities(snapshots):

@@ -1,14 +1,10 @@
 from __future__ import annotations
-import asyncio
 from typing import List, Dict, Any
 from datetime import datetime, timezone, timedelta
-import json
 
 from playwright.async_api import async_playwright, Browser, Page
 from ..core.models import MarketSnapshot, OddsQuote
 from ..core.matchers import match_id
-
-DEMO = False  # Set to True to use demo data instead of scraping
 
 
 async def _scrape_orbit_page() -> Dict[str, Any] | None:
@@ -17,7 +13,7 @@ async def _scrape_orbit_page() -> Dict[str, Any] | None:
         async with async_playwright() as p:
             # Launch browser with your cookies and user agent
             browser = await p.chromium.launch(
-                headless=False,  # Set to False for debugging
+                headless=True,  # Set to False for debugging
                 args=[
                     "--no-sandbox",
                     "--disable-setuid-sandbox",
@@ -240,13 +236,9 @@ async def _scrape_orbit_page() -> Dict[str, Any] | None:
                 )
 
                 from bs4 import BeautifulSoup
-                import re
 
-                def _nums_from(node):
-                    text = node.get_text(" ", strip=True)
-                    return [float(m) for m in re.findall(r"\d+(?:\.\d+)?", text)]
-
-                rows_objects: list[dict] = []
+                # Selection IDs (1, X, 2) if you want them
+                nums: list[float] = []
                 for container_html in rows_html_list or []:
                     soup = BeautifulSoup(container_html, "html.parser")
                     for row in soup.select(
@@ -258,36 +250,27 @@ async def _scrape_orbit_page() -> Dict[str, Any] | None:
                             continue
                         home = teams[0].get("title") or teams[0].text.strip()
                         away = teams[1].get("title") or teams[1].text.strip()
-
-                        # Selection IDs (1, X, 2) if you want them
-                        sel_ids = [
-                            n.get("data-selection-id")
-                            for n in row.select(
-                                ".betContentContainer[data-selection-id]"
-                            )
-                        ][:3]
-
-                        # First six numeric values in document order
-                        nums: list[float] = []
                         cnt: int = 0
-                        # Find odds numbers like '12' inside each bet cell
+                        labels = ["1", "X", "2"]
                         for wrapper in row.select(".styles_betContent__wrapper__25jEo"):
-                            print("===============>")
-                            for odds_el in wrapper.select(
-                                ".betContentCellMarket .styles_betOdds__bxapE"
-                            ):
+                            nums.append({"home": home, "away": away})
+                            for odds_el in wrapper.select(".betContentCellMarket"):
                                 if cnt % 2 != 0:
-                                    print("ODDS_EL:", odds_el)
                                     txt = (odds_el.get_text(strip=True) or "").replace(
                                         ",", ""
                                     )
+                                    label = (
+                                        labels[cnt // 2]
+                                        if (cnt // 2) < len(labels)
+                                        else f"label_{cnt//2}"
+                                    )
                                     if txt == "":
-                                        nums.append(0.0)
-                                        print(f"FOUND ODDS: 0 (empty odds)")
+                                        nums.append({"label": label, "odds": 0.0})
                                     else:
                                         try:
-                                            nums.append(float(txt))
-                                            print(f"FOUND ODDS: {txt}")
+                                            nums.append(
+                                                {"label": label, "odds": float(txt)}
+                                            )
                                         except Exception:
                                             pass
                                 cnt += 1
@@ -295,6 +278,7 @@ async def _scrape_orbit_page() -> Dict[str, Any] | None:
                                     break
                             if len(nums) >= 6:
                                 break
+                return nums
             except Exception as e:
                 print("[ORBIT] Error capturing .rowsContainer:", e)
 
@@ -397,18 +381,10 @@ async def fetch_orbit_snapshots() -> List[MarketSnapshot]:
     # Real scraping mode
     print("[ORBIT] Starting Playwright scraping...")
     scraped_data = await _scrape_orbit_page()
-
+    print(scraped_data, "==================>")
     if not scraped_data:
         print("[ORBIT] Failed to scrape page data")
         return []
-
-    # Save raw scraped data for debugging
-    try:
-        with open("orbit_scraped_data.json", "w", encoding="utf-8") as f:
-            json.dump(scraped_data, f, indent=2, ensure_ascii=False)
-        print("[ORBIT] Saved raw scraped data to orbit_scraped_data.json")
-    except Exception as e:
-        print(f"[ORBIT] Error saving scraped data: {e}")
 
     # Convert to snapshots
     snapshots = _parse_scraped_data_to_snapshots(scraped_data)
