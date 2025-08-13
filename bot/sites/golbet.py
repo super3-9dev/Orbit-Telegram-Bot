@@ -5,12 +5,10 @@ from bs4 import BeautifulSoup
 from playwright.async_api import async_playwright
 from ..core.models import MarketSnapshot
 
-URL = "https://www.golbet724.com/maclar"
-
 async def _scrape_golbet724_page() -> Dict[str, Any] | None:
     """Scrape the Golbet724 page using Playwright; capture network JSON, WebSocket frames, and DOM selection IDs."""
     async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=False, args=["--no-sandbox"])
+        browser = await p.chromium.launch(headless=True, args=["--no-sandbox"])
         ctx = await browser.new_context(
             user_agent=(
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -20,7 +18,8 @@ async def _scrape_golbet724_page() -> Dict[str, Any] | None:
         page = await ctx.new_page()
 
         # Re-render the page to ensure fresh content
-        await page.goto(URL, wait_until="domcontentloaded")
+        print("[GOLBET] Navigating to https://www.golbet724.com/maclar")
+        await page.goto("https://www.golbet724.com/maclar", wait_until="domcontentloaded")
         await page.evaluate(
             """(token) => { localStorage.setItem('auth_token', token); }""",
             "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJodHRwOi8vc2NoZW1hcy54bWxzb2FwLm9yZy93cy8yMDA1LzA1L2lkZW50aXR5L2NsYWltcy9uYW1lIjoiMjc4MTgiLCJodHRwOi8vc2NoZW1hcy5taWNyb3NvZnQuY29tL3dzLzIwMDgvMDYvaWRlbnRpdHkvY2xhaW1zL3JvbGUiOiJBbHRCYXlpIiwiaHR0cDovL3NjaGVtYXMueG1sc29hcC5vcmcvd3MvMjAwNS8wNS9pZGVudGl0eS9jbGFpbXMvZ2l2ZW5uYW1lIjoiZGF5xLEyMSIsImh0dHA6Ly9zY2hlbWFzLm1pY3Jvc29mdC5jb20vd3MvMjAwOC8wNi9pZGVudGl0eS9jbGFpbXMvZ3JvdXBzaWQiOiIyNjgzMiIsImp0aSI6ImVhMDYyMDg1LWFkNzctNDZlNy04ODgwLTMzZWM3NjI0ODEwZSIsImV4cCI6MTc1NTEyNjI4MiwiaXNzIjoid3d3LnJpbzcyNC5jb20iLCJhdWQiOiJyaW83MjQuY29tIn0.MgGG1Mn7BSx05T9MqYGptPUayJ2wkUdv0fwJ8cglXxw",
@@ -28,7 +27,7 @@ async def _scrape_golbet724_page() -> Dict[str, Any] | None:
         await page.reload(wait_until="domcontentloaded")
         # Give the dynamic table time to render
         # Find the select element with class "form-control" and select the second option
-        await page.wait_for_timeout(5000)
+        await page.wait_for_timeout(10000)
         await page.wait_for_selector("select.form-control")
         select_elem = await page.query_selector("select.form-control")
         options = await select_elem.query_selector_all("option")
@@ -60,8 +59,7 @@ async def _scrape_golbet724_page() -> Dict[str, Any] | None:
             print(f"[GOLBET] Failed to scroll: {e}")
 
         rows_html_list = await page.eval_on_selector_all(
-            ".oranRow",
-            "els => els.map(el => el.outerHTML)"
+            ".oranRow", "els => els.map(el => el.outerHTML)"
         )
         await browser.close()
 
@@ -69,7 +67,7 @@ async def _scrape_golbet724_page() -> Dict[str, Any] | None:
     for row_html in rows_html_list:
         soup = BeautifulSoup(row_html, "html.parser")
         odds_data = []
-        
+
         # Get team names
         team_elements = soup.select(".mac-name .mleft, .mac-name .mright")
         if len(team_elements) >= 2:
@@ -86,12 +84,11 @@ async def _scrape_golbet724_page() -> Dict[str, Any] | None:
         nums.append(odds_data)
     return nums
 
-
 async def fetch_golbet724_snapshots() -> List[MarketSnapshot]:
     """Fetch Golbet724 snapshots using Playwright scraping"""
 
     # Real scraping mode
     print("[GOLBET] Starting Playwright scraping...")
     scraped_data = await _scrape_golbet724_page()
-    
+
     return scraped_data

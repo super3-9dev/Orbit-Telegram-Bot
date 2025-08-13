@@ -250,8 +250,9 @@ async def _scrape_orbit_page() -> Dict[str, Any] | None:
                         away = teams[1].get("title") or teams[1].text.strip()
                         cnt: int = 0
                         labels = ["1", "X", "2"]
+                        odds_data = []
                         for wrapper in row.select(".styles_betContent__wrapper__25jEo"):
-                            nums.append({"home": home, "away": away})
+                            odds_data.append({"home": home, "away": away})
                             for odds_el in wrapper.select(".betContentCellMarket"):
                                 if cnt % 2 != 0:
                                     txt = (odds_el.get_text(strip=True) or "").replace(
@@ -263,20 +264,21 @@ async def _scrape_orbit_page() -> Dict[str, Any] | None:
                                         else f"label_{cnt//2}"
                                     )
                                     if txt == "":
-                                        nums.append({"label": label, "odds": 0.0})
+                                        odds_data.append({"label": label, "odds": 0.0})
                                     else:
                                         try:
-                                            nums.append(
+                                            odds_data.append(
                                                 {"label": label, "odds": float(txt)}
                                             )
                                         except Exception:
                                             pass
                                 cnt += 1
-                                if len(nums) >= 6:
+                                if len(odds_data) >= 6:
                                     break
-                            if len(nums) >= 6:
+                            if len(odds_data) >= 6:
                                 break
-                        print(nums)
+                        print(odds_data)
+                        nums.append(odds_data)
                 return nums
             except Exception as e:
                 print("[ORBIT] Error capturing .rowsContainer:", e)
