@@ -1,10 +1,8 @@
 from __future__ import annotations
 from typing import List, Dict, Any
-from datetime import datetime, timezone, timedelta
 
-from playwright.async_api import async_playwright, Browser, Page
-from ..core.models import MarketSnapshot, OddsQuote
-from ..core.matchers import match_id
+from playwright.async_api import async_playwright
+from ..core.models import MarketSnapshot
 
 
 async def _scrape_orbit_page() -> Dict[str, Any] | None:
@@ -287,172 +285,11 @@ async def _scrape_orbit_page() -> Dict[str, Any] | None:
         print(f"[ORBIT SCRAPING ERROR] {e}")
         return None
 
-
-def _parse_scraped_data_to_snapshots(
-    scraped_data: Dict[str, Any],
-) -> List[MarketSnapshot]:
-    """Convert scraped page/network data (current list format) into MarketSnapshot objects."""
-    snapshots: List[MarketSnapshot] = []
-    if not scraped_data:
-        print("[ORBIT] No scraped content")
-        return snapshots
-
-    # Case 1: current scraper returns a flat list of dicts:
-    #   {"home","away"} then multiple {"label","odds"} entries
-    if isinstance(scraped_data, list):
-        i = 0
-        while i < len(scraped_data):
-            item = scraped_data[i]
-            if isinstance(item, dict) and "home" in item and "away" in item:
-                home = (item.get("home") or "").strip()
-                away = (item.get("away") or "").strip()
-                quotes: List[OddsQuote] = []
-                i += 1
-                # Collect following label/odds until the next match header
-                while i < len(scraped_data):
-                    nxt = scraped_data[i]
-                    if isinstance(nxt, dict) and "home" in nxt and "away" in nxt:
-                        break
-                    if isinstance(nxt, dict) and "label" in nxt and "odds" in nxt:
-                        label = str(nxt.get("label") or "").upper()
-                        odds_val = nxt.get("odds")
-                        if isinstance(odds_val, (int, float)) and odds_val > 0:
-                            if label == "1":
-                                quotes.append(
-                                    OddsQuote(
-                                        site="orbit",
-                                        market="1X2",
-                                        selection="Home",
-                                        odds=float(odds_val),
-                                        kind="LAY",
-                                    )
-                                )
-                            elif label == "X":
-                                quotes.append(
-                                    OddsQuote(
-                                        site="orbit",
-                                        market="1X2",
-                                        selection="Draw",
-                                        odds=float(odds_val),
-                                        kind="LAY",
-                                    )
-                                )
-                            elif label == "2":
-                                quotes.append(
-                                    OddsQuote(
-                                        site="orbit",
-                                        market="1X2",
-                                        selection="Away",
-                                        odds=float(odds_val),
-                                        kind="LAY",
-                                    )
-                                )
-                            # ignore other labels for now
-                    i += 1
-                if quotes and home and away:
-                    league = "Orbit"
-                    kickoff = datetime.now(timezone.utc) + timedelta(hours=1)
-                    mid = match_id(league, kickoff.strftime("%Y-%m-%d"), home, away)
-                    snapshots.append(
-                        MarketSnapshot(
-                            match_id=mid,
-                            match_name=f"{home} vs {away}",
-                            league=league,
-                            kickoff_utc=kickoff,
-                            quotes=quotes,
-                        )
-                    )
-                continue
-            i += 1
-        return snapshots
-
-    # Case 2: legacy dict fallback (keep minimal functionality)
-    if isinstance(scraped_data, dict):
-        events = scraped_data.get("events", []) or []
-        odds_nodes = scraped_data.get("odds", []) or []
-        if not events and not odds_nodes:
-            print("[ORBIT] No events/odds data found in scraped content")
-            return snapshots
-
-        try:
-            league = "Unknown League"
-            kickoff = datetime.now(timezone.utc) + timedelta(hours=1)
-            match_name = "Scraped Match"
-            if events:
-                first_event = events[0]
-                if isinstance(first_event, dict) and first_event.get("text"):
-                    match_name = str(first_event["text"])[:100]
-
-            mid = match_id(league, kickoff.strftime("%Y-%m-%d"), match_name, "")
-            quotes = []
-            import re as _re
-
-            for i, odds_item in enumerate(odds_nodes[:5]):
-                try:
-                    text = str(odds_item.get("text", ""))
-                    numbers = _re.findall(r"\d+\.?\d*", text)
-                    if numbers:
-                        odds_value = float(numbers[0])
-                        quotes.append(
-                            OddsQuote(
-                                site="orbit",
-                                market="1X2",
-                                selection=f"Sel_{i}",
-                                odds=odds_value,
-                                kind="LAY",
-                            )
-                        )
-                except Exception:
-                    continue
-            if not quotes:
-                quotes = [
-                    OddsQuote(
-                        site="orbit",
-                        market="1X2",
-                        selection="Home",
-                        odds=2.10,
-                        kind="LAY",
-                    ),
-                    OddsQuote(
-                        site="orbit",
-                        market="1X2",
-                        selection="Draw",
-                        odds=3.50,
-                        kind="LAY",
-                    ),
-                    OddsQuote(
-                        site="orbit",
-                        market="1X2",
-                        selection="Away",
-                        odds=3.40,
-                        kind="LAY",
-                    ),
-                ]
-            snapshots.append(
-                MarketSnapshot(
-                    match_id=mid,
-                    match_name=match_name,
-                    league=league,
-                    kickoff_utc=kickoff,
-                    quotes=quotes,
-                )
-            )
-        except Exception as e:
-            print(f"[ORBIT] Error creating fallback snapshot: {e}")
-        return snapshots
-
-
 async def fetch_orbit_snapshots() -> List[MarketSnapshot]:
     """Fetch Orbit snapshots using Playwright scraping"""
 
     # Real scraping mode
     print("[ORBIT] Starting Playwright scraping...")
     scraped_data = await _scrape_orbit_page()
-    if not scraped_data:
-        print("[ORBIT] Failed to scrape page data")
-        return []
 
-    # Convert to snapshots
-    snapshots = _parse_scraped_data_to_snapshots(scraped_data)
-    print(f"[ORBIT] Successfully created {len(snapshots)} snapshots")
-    return snapshots
+    return scraped_data

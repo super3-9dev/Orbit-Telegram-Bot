@@ -1,28 +1,14 @@
 from __future__ import annotations
-import os, asyncio
-from typing import List
-from datetime import datetime, timezone, timedelta
-import re
+from typing import List, Dict, Any
 
 from bs4 import BeautifulSoup
 from playwright.async_api import async_playwright
-from ..core.models import MarketSnapshot, OddsQuote
-from ..core.matchers import match_id
+from ..core.models import MarketSnapshot
 
 URL = "https://www.golbet724.com/maclar"
 
-
-def _to_float(text: str) -> float | None:
-    if not text:
-        return None
-    text = text.strip().replace(",", ".")
-    m = re.search(r"\d+(?:\.\d+)?", text)
-    return float(m.group(0)) if m else None
-
-
-async def fetch_golbet724_snapshots() -> List[MarketSnapshot]:
-    snapshots: List[MarketSnapshot] = []
-
+async def _scrape_golbet724_page() -> Dict[str, Any] | None:
+    """Scrape the Orbit page using Playwright; capture network JSON, WebSocket frames, and DOM selection IDs."""
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=False, args=["--no-sandbox"])
         ctx = await browser.new_context(
@@ -96,6 +82,15 @@ async def fetch_golbet724_snapshots() -> List[MarketSnapshot]:
             odds_text = odds_el.get_text(strip=True)
             label = ["1", "X", "2"][i] if i < 3 else f"label_{i}"
             odds_data.append({"label": label, "odds": odds_text})
-        print(odds_data)
         nums.append(odds_data)
-    return snapshots
+    return nums
+
+
+async def fetch_golbet724_snapshots() -> List[MarketSnapshot]:
+    """Fetch Orbit snapshots using Playwright scraping"""
+
+    # Real scraping mode
+    print("[ORBIT] Starting Playwright scraping...")
+    scraped_data = await _scrape_golbet724_page()
+    
+    return scraped_data
