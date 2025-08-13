@@ -17,7 +17,7 @@ async def _scrape_orbit_page() -> Dict[str, Any] | None:
         async with async_playwright() as p:
             # Launch browser with your cookies and user agent
             browser = await p.chromium.launch(
-                headless=True,  # Set to False for debugging
+                headless=False,  # Set to False for debugging
                 args=[
                     "--no-sandbox",
                     "--disable-setuid-sandbox",
@@ -173,58 +173,128 @@ async def _scrape_orbit_page() -> Dict[str, Any] | None:
                 "https://orbitxch.com/customer/sport/1", wait_until="networkidle"
             )
 
-            # Wait for the page to load completely
-            await page.wait_for_timeout(20000)  # Give time for odds to stream in
+            await page.wait_for_selector(".rowsContainer", state="visible")
+
+            # Simulate clicking the "Today" button to filter today's events
+            try:
+                # The "Today" tab is a <li> element, not a <button>
+                today_tab = await page.query_selector(
+                    'li[aria-label="tab"]:has-text("Today")'
+                )
+                if today_tab:
+                    await today_tab.click()
+                    # Wait for the rows to update after clicking "Today"
+                    await page.wait_for_timeout(3000)
+
+                    while True:
+                        finished = await page.evaluate(
+                            """
+                            () => {
+                                const el = document.querySelector('.styles_scrollableContent__i6NQK');
+                                if (!el) return true;
+                                const before = el.scrollTop;
+                                el.scrollBy(0, 50);
+                                // If we can't scroll further, we're done
+                                if (el.scrollTop === before || el.scrollTop + el.clientHeight >= el.scrollHeight) {
+                                    return true;
+                                }
+                                return false;
+                            }
+                            """
+                        )
+                        if finished:
+                            break
+                        await page.wait_for_timeout(400)
+                else:
+                    # Fallback: try to find by text only if aria-label fails
+                    today_tab = await page.query_selector('li:has-text("Today")')
+                    if today_tab:
+                        await today_tab.click()
+                        await page.wait_for_timeout(3000)
+                        while True:
+                            finished = await page.evaluate(
+                                """
+                                () => {
+                                    const el = document.querySelector('.styles_scrollableContent__i6NQK');
+                                    if (!el) return true;
+                                    const before = el.scrollTop;
+                                    el.scrollBy(0, 50);
+                                    // If we can't scroll further, we're done
+                                    if (el.scrollTop === before || el.scrollTop + el.clientHeight >= el.scrollHeight) {
+                                        return true;
+                                    }
+                                    return false;
+                                }
+                                """
+                            )
+                            if finished:
+                                break
+                            await page.wait_for_timeout(400)
+                        await page.wait_for_timeout(1000)
+            except Exception as e:
+                print(f"[ORBIT] Failed to click 'Today' tab: {e}")
 
             try:
                 rows_html_list = await page.eval_on_selector_all(
                     ".rowsContainer", "els => els.map(el => el.outerHTML)"
                 )
-                
+
                 from bs4 import BeautifulSoup
                 import re
+
                 def _nums_from(node):
-                    print(node, "===================>")
                     text = node.get_text(" ", strip=True)
-                    print(text, "===================>")
                     return [float(m) for m in re.findall(r"\d+(?:\.\d+)?", text)]
 
                 rows_objects: list[dict] = []
                 for container_html in rows_html_list or []:
                     soup = BeautifulSoup(container_html, "html.parser")
-                    for row in soup.select('div.biab_group-markets-table-row[data-market-prices="true"]'):
-                        
-                        teams = row.select('.biab_market-title-team-names p[title]')
+                    for row in soup.select(
+                        'div.biab_group-markets-table-row[data-market-prices="true"]'
+                    ):
+
+                        teams = row.select(".biab_market-title-team-names p[title]")
                         if len(teams) < 2:
                             continue
-                        home = teams[0].get('title') or teams[0].text.strip()
-                        away = teams[1].get('title') or teams[1].text.strip()
+                        home = teams[0].get("title") or teams[0].text.strip()
+                        away = teams[1].get("title") or teams[1].text.strip()
 
                         # Selection IDs (1, X, 2) if you want them
-                        sel_ids = [n.get('data-selection-id') for n in row.select('.betContentContainer[data-selection-id]')][:3]
+                        sel_ids = [
+                            n.get("data-selection-id")
+                            for n in row.select(
+                                ".betContentContainer[data-selection-id]"
+                            )
+                        ][:3]
 
                         # First six numeric values in document order
                         nums: list[float] = []
-                        cnt: int = 2
-                        for el in row.select('.styles_betContent__wrapper__25jEo'):
-                            values = el.select('div.styles_contents__Kf8LQ')[1]
-                            # Get the tag that is included in this tag
-                            tag_included = values.select('div.betContentCellMarket')
-                            print(tag_included, "===================>")
-                            # if (cnt % 2) != 0:
-                            #     continue
-                            # cnt += 1
-                            # nums += _nums_from(el)
-                            # if len(nums) >= 6:
-                            #     break
-                        # obj = {'teams': f'{home} VS {away}'}
-                        # for i, val in enumerate(nums[:6], start=1):
-                        #     obj[str(i)] = val
-                        # if len(sel_ids) == 3:
-                        #     obj.update({'s1': sel_ids[0], 'sx': sel_ids[1], 's2': sel_ids[2]})
-                        # rows_objects.append(obj)
-
-                # print('[ORBIT] sample object:', rows_objects[0] if rows_objects else None)
+                        cnt: int = 0
+                        # Find odds numbers like '12' inside each bet cell
+                        for wrapper in row.select(".styles_betContent__wrapper__25jEo"):
+                            print("===============>")
+                            for odds_el in wrapper.select(
+                                ".betContentCellMarket .styles_betOdds__bxapE"
+                            ):
+                                if cnt % 2 != 0:
+                                    print("ODDS_EL:", odds_el)
+                                    txt = (odds_el.get_text(strip=True) or "").replace(
+                                        ",", ""
+                                    )
+                                    if txt == "":
+                                        nums.append(0.0)
+                                        print(f"FOUND ODDS: 0 (empty odds)")
+                                    else:
+                                        try:
+                                            nums.append(float(txt))
+                                            print(f"FOUND ODDS: {txt}")
+                                        except Exception:
+                                            pass
+                                cnt += 1
+                                if len(nums) >= 6:
+                                    break
+                            if len(nums) >= 6:
+                                break
             except Exception as e:
                 print("[ORBIT] Error capturing .rowsContainer:", e)
 
