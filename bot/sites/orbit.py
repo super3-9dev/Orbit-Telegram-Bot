@@ -276,6 +276,7 @@ async def _scrape_orbit_page() -> Dict[str, Any] | None:
                                     break
                             if len(nums) >= 6:
                                 break
+                        print(nums)
                 return nums
             except Exception as e:
                 print("[ORBIT] Error capturing .rowsContainer:", e)

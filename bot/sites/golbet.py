@@ -8,7 +8,7 @@ from ..core.models import MarketSnapshot
 URL = "https://www.golbet724.com/maclar"
 
 async def _scrape_golbet724_page() -> Dict[str, Any] | None:
-    """Scrape the Orbit page using Playwright; capture network JSON, WebSocket frames, and DOM selection IDs."""
+    """Scrape the Golbet724 page using Playwright; capture network JSON, WebSocket frames, and DOM selection IDs."""
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=False, args=["--no-sandbox"])
         ctx = await browser.new_context(
@@ -82,15 +82,16 @@ async def _scrape_golbet724_page() -> Dict[str, Any] | None:
             odds_text = odds_el.get_text(strip=True)
             label = ["1", "X", "2"][i] if i < 3 else f"label_{i}"
             odds_data.append({"label": label, "odds": odds_text})
+        print(odds_data)
         nums.append(odds_data)
     return nums
 
 
 async def fetch_golbet724_snapshots() -> List[MarketSnapshot]:
-    """Fetch Orbit snapshots using Playwright scraping"""
+    """Fetch Golbet724 snapshots using Playwright scraping"""
 
     # Real scraping mode
-    print("[ORBIT] Starting Playwright scraping...")
+    print("[GOLBET] Starting Playwright scraping...")
     scraped_data = await _scrape_golbet724_page()
     
     return scraped_data
