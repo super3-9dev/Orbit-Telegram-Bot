@@ -19,11 +19,12 @@ def _to_float(text: str) -> float | None:
     m = re.search(r"\d+(?:\.\d+)?", text)
     return float(m.group(0)) if m else None
 
+
 async def fetch_golbet724_snapshots() -> List[MarketSnapshot]:
     snapshots: List[MarketSnapshot] = []
 
     async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=True, args=["--no-sandbox"])
+        browser = await p.chromium.launch(headless=False, args=["--no-sandbox"])
         ctx = await browser.new_context(
             user_agent=(
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -31,9 +32,25 @@ async def fetch_golbet724_snapshots() -> List[MarketSnapshot]:
             )
         )
         page = await ctx.new_page()
+
+        # Re-render the page to ensure fresh content
         await page.goto(URL, wait_until="domcontentloaded")
+        await page.evaluate(
+            """(token) => { localStorage.setItem('auth_token', token); }""",
+            "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJodHRwOi8vc2NoZW1hcy54bWxzb2FwLm9yZy93cy8yMDA1LzA1L2lkZW50aXR5L2NsYWltcy9uYW1lIjoiMjc4MTgiLCJodHRwOi8vc2NoZW1hcy5taWNyb3NvZnQuY29tL3dzLzIwMDgvMDYvaWRlbnRpdHkvY2xhaW1zL3JvbGUiOiJBbHRCYXlpIiwiaHR0cDovL3NjaGVtYXMueG1sc29hcC5vcmcvd3MvMjAwNS8wNS9pZGVudGl0eS9jbGFpbXMvZ2l2ZW5uYW1lIjoiZGF5xLEyMSIsImh0dHA6Ly9zY2hlbWFzLm1pY3Jvc29mdC5jb20vd3MvMjAwOC8wNi9pZGVudGl0eS9jbGFpbXMvZ3JvdXBzaWQiOiIyNjgzMiIsImp0aSI6ImVhMDYyMDg1LWFkNzctNDZlNy04ODgwLTMzZWM3NjI0ODEwZSIsImV4cCI6MTc1NTEyNjI4MiwiaXNzIjoid3d3LnJpbzcyNC5jb20iLCJhdWQiOiJyaW83MjQuY29tIn0.MgGG1Mn7BSx05T9MqYGptPUayJ2wkUdv0fwJ8cglXxw",
+        )
+        await page.reload(wait_until="domcontentloaded")
         # Give the dynamic table time to render
-        await page.wait_for_timeout(3000)
+        # Find the select element with class "form-control" and select the second option
+        await page.wait_for_timeout(10000)
+        await page.wait_for_selector("select.form-control")
+        select_elem = await page.query_selector("select.form-control")
+        options = await select_elem.query_selector_all("option")
+        if len(options) > 1:
+            value = await options[1].get_attribute("value")
+            await select_elem.select_option(value)
+
+        await page.wait_for_timeout(60000)
         html = await page.content()
         await browser.close()
 
