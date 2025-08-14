@@ -13,8 +13,11 @@ from ..sites.golbet import fetch_golbet724_snapshots
 
 
 async def run_cycle(dedupe: DedupeCache):
+
     orbitData = await fetch_orbit_snapshots()
+    print(f"[ORBIT] 📊 Found {len(orbitData)} matches")
     golbetData = await fetch_golbet724_snapshots()
+    print(f"[GOLBET] 📊 Found {len(golbetData)} matches")
     # Compare and notify
     result = compare(orbitData, golbetData)
     

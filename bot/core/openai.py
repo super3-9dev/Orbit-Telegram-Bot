@@ -17,6 +17,8 @@ client = OpenAI(api_key=api_key)
 def compare(orbit_data, golbet_data):
     try:
         # Convert the arrays to string representations for the prompt
+        from datetime import datetime
+        now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         user_prompt = f"""
 Analyze this football betting data to find arbitrage opportunities:
 
@@ -31,7 +33,8 @@ Instructions:
 2. Compare Orbit LAY odds with Golbet odds for each selection (1, X, 2)
 3. Calculate the percentage difference: ((Golbet odds - Orbit LAY odds) / Orbit LAY odds) × 100
 4. ONLY include opportunities where the percentage difference is between -1% and +30%
-5. Return ONLY the array of opportunities, no JSON wrapper, no explanations:
+5. For each opportunity, set "detection_time" to "{now_str}" (already provided, do NOT generate your own time).
+6. Return ONLY the array of opportunities, no JSON wrapper, no explanations:
 
 [
     {{
@@ -40,7 +43,7 @@ Instructions:
         "comparison_odds": 2.20,
         "odds_difference": "0.20 (10.00%)",
         "market_type": "1X2",
-        "detection_time": "2024-01-15 14:30:25"
+        "detection_time": "{now_str}"
     }}
 ]
 
@@ -50,7 +53,7 @@ Requirements:
 - Comparison odds: The corresponding odds from Golbet
 - Odds difference: Both numeric difference and percentage
 - Market type: Always "1X2" for football matches
-- Detection time: Current timestamp in YYYY-MM-DD HH:MM:SS format
+- detection_time: Always use "{now_str}" exactly as shown above for every opportunity.
 
 IMPORTANT FILTERING RULES:
 - Percentage difference must be >= -1% AND <= +30%
