@@ -18,6 +18,7 @@ async def _scrape_golbet724_page() -> Dict[str, Any] | None:
         page = await ctx.new_page()
 
         # Navigate to the actual page
+        print("[GOLBET] Navigating to https://www.golbet724.com/maclar")
         await page.goto("https://www.golbet724.com/maclar", wait_until="domcontentloaded")
         
         # Wait for the page to load and look for login form
