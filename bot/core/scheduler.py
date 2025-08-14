@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from .models import MarketSnapshot
 from .compare import find_opportunities, pct_change
 from .dedupe import DedupeCache
-from .notify import send_telegram, format_alert
+from .notify import send_telegram, format_alert, format_ai_analysis_result
 from .openai import compare
 
 SCAN_INTERVAL_SECONDS = int(os.getenv("SCAN_INTERVAL_SECONDS", "60"))
@@ -19,24 +19,22 @@ from ..sites.golbet import fetch_golbet724_snapshots
 async def run_cycle(dedupe: DedupeCache):
     orbitData = await fetch_orbit_snapshots()
     golbetData = await fetch_golbet724_snapshots()
-    print(compare(orbitData, golbetData))
-    # # Compare and notify
-    # for comparison in compare(orbitData, golbetData):
-    #     msg = format_alert(
-    #         match_name=comparison.match_name,
-    #         league=comparison.league,
-    #         market=comparison.market,
-    #         selection=comparison.selection,
-    #         orbit_odds=comparison.orbit_odds,
-    #         other_site=comparison.other_site,
-    #         other_odds=comparison.other_odds,
-    #         detected_dt=datetime.now(timezone.utc),
-    #         kickoff_dt=comparison.kickoff_utc,
-    #         diff_pct=comparison.diff_pct,
-    #         diff_abs=comparison.diff_abs
-    #     )
-    #     await send_telegram(msg)
-    #     dedupe.mark(comparison.match_id, comparison.market, comparison.selection)
+    # Compare and notify
+    result = compare(orbitData, golbetData)
+    
+    if result:
+        try:
+            # Format and send the result via Telegram
+            msg = format_ai_analysis_result(result, orbitData, golbetData)
+            await send_telegram(msg)
+            
+        except Exception as e:
+            print(f"Error processing AI result: {e}")
+            # Send raw result if formatting fails
+            await send_telegram(f"🤖 AI Analysis Result:\n\n{result}")
+    else:
+        print("No comparison result received")
+        await send_telegram("❌ No arbitrage opportunities found in this cycle")
 
 
 async def scheduler():

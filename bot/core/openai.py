@@ -29,21 +29,20 @@ GOLBET DATA (BACK odds):
 Instructions:
 1. Match teams with the same names between Orbit and Golbet
 2. Compare Orbit LAY odds with Golbet odds for each selection (1, X, 2)
-3. Only include opportunities where Orbit LAY odds <= Golbet odds
-4. Return results in this exact JSON format with these 6 required fields:
+3. Calculate the percentage difference: ((Golbet odds - Orbit LAY odds) / Orbit LAY odds) × 100
+4. ONLY include opportunities where the percentage difference is between -1% and +30%
+5. Return ONLY the array of opportunities, no JSON wrapper, no explanations:
 
-{{
-    "opportunities": [
-        {{
-            "match_name": "Team A vs Team B",
-            "orbit_lay_odds": 2.50,
-            "comparison_odds": 2.60,
-            "odds_difference": "0.10 (3.85%)",
-            "market_type": "1X2",
-            "detection_time": "2024-01-15 14:30:25"
-        }}
-    ]
-}}
+[
+    {{
+        "match_name": "Team A vs Team B",
+        "orbit_lay_odds": 2.00,
+        "comparison_odds": 2.20,
+        "odds_difference": "0.20 (10.00%)",
+        "market_type": "1X2",
+        "detection_time": "2024-01-15 14:30:25"
+    }}
+]
 
 Requirements:
 - Match name: Full team names (e.g., "Arsenal vs Chelsea")
@@ -53,7 +52,17 @@ Requirements:
 - Market type: Always "1X2" for football matches
 - Detection time: Current timestamp in YYYY-MM-DD HH:MM:SS format
 
-Only return valid arbitrage opportunities where Orbit LAY <= Golbet odds.
+IMPORTANT FILTERING RULES:
+- Percentage difference must be >= -1% AND <= +30%
+- Formula: ((Golbet odds - Orbit LAY odds) / Orbit LAY odds) × 100
+- Examples:
+  • Orbit: 2.00, Golbet: 2.20 → +10% → INCLUDE ✅
+  • Orbit: 2.00, Golbet: 1.95 → -2.5% → EXCLUDE ❌
+  • Orbit: 2.00, Golbet: 2.80 → +40% → EXCLUDE ❌
+
+Only return valid arbitrage opportunities within the -1% to +30% threshold.
+Return ONLY the array, no other text, no JSON wrapper, no explanations.
+Do NOT wrap the result in ```json or any code block. Return only the array.
 """
         
         completion = client.chat.completions.create(
@@ -65,10 +74,15 @@ Only return valid arbitrage opportunities where Orbit LAY <= Golbet odds.
                 },
             ],
         )
-        print("--------------------------------")
-        print(completion.choices[0].message.content)
-        print("--------------------------------")
-        return completion.choices[0].message.content
+        # Remove any accidental code block markers from the response
+        content = completion.choices[0].message.content
+        if content.startswith("```json"):
+            content = content[7:]
+        if content.startswith("```"):
+            content = content[3:]
+        if content.endswith("```"):
+            content = content[:-3]
+        return content.strip()
     except openai.RateLimitError:
         print("Rate limit exceeded")
         return None
