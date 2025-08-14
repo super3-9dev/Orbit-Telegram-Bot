@@ -8,7 +8,7 @@ from ..core.models import MarketSnapshot
 async def _scrape_golbet724_page() -> Dict[str, Any] | None:
     """Scrape the Golbet724 page using Playwright; capture network JSON, WebSocket frames, and DOM selection IDs."""
     async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=True, args=["--no-sandbox"])
+        browser = await p.chromium.launch(headless=False, args=["--no-sandbox"])
         ctx = await browser.new_context(
             user_agent=(
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -17,8 +17,7 @@ async def _scrape_golbet724_page() -> Dict[str, Any] | None:
         )
         page = await ctx.new_page()
 
-        # Re-render the page to ensure fresh content
-        print("[GOLBET] Navigating to https://www.golbet724.com/maclar")
+        # Navigate to the actual page
         await page.goto("https://www.golbet724.com/maclar", wait_until="domcontentloaded")
         await page.evaluate(
             """(token) => { localStorage.setItem('auth_token', token); }""",
