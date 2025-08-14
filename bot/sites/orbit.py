@@ -277,7 +277,6 @@ async def _scrape_orbit_page() -> Dict[str, Any] | None:
                                     break
                             if len(odds_data) >= 6:
                                 break
-                        print(odds_data)
                         nums.append(odds_data)
                 return nums
             except Exception as e:
@@ -292,7 +291,6 @@ async def fetch_orbit_snapshots() -> List[MarketSnapshot]:
     """Fetch Orbit snapshots using Playwright scraping"""
 
     # Real scraping mode
-    print("[ORBIT] Starting Playwright scraping...")
     scraped_data = await _scrape_orbit_page()
 
     return scraped_data

@@ -8,7 +8,7 @@ from ..core.models import MarketSnapshot
 async def _scrape_golbet724_page() -> Dict[str, Any] | None:
     """Scrape the Golbet724 page using Playwright; capture network JSON, WebSocket frames, and DOM selection IDs."""
     async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=False, args=["--no-sandbox"])
+        browser = await p.chromium.launch(headless=True, args=["--no-sandbox"])
         ctx = await browser.new_context(
             user_agent=(
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -30,33 +30,20 @@ async def _scrape_golbet724_page() -> Dict[str, Any] | None:
             login_button = await page.query_selector('input[type="submit"][value="Login"]')
             
             if username_input and password_input and login_button:
-                print("[GOLBET] Login form found, attempting to login...")
-                
-                # Fill in the login credentials
                 await username_input.fill("dayı21")
                 await password_input.fill("123456")
-                
-                # Click the login button
                 await login_button.click()
                 
-                # Wait for login to complete
                 await page.wait_for_timeout(3000)
-                print("[GOLBET] Login attempt completed")
                 
-                # Check if login was successful by looking for authenticated content
                 try:
                     await page.wait_for_selector("select.form-control", timeout=5000)
-                    print("[GOLBET] Login successful, authenticated content found")
                 except:
                     print("[GOLBET] Warning: Login may have failed, continuing anyway...")
-            else:
-                print("[GOLBET] Login form not found, continuing without authentication...")
                 
         except Exception as e:
             print(f"[GOLBET] Login error: {e}, continuing without authentication...")
         
-        # Give the dynamic table time to render
-        # Find the select element with class "form-control" and select the second option
         await page.wait_for_timeout(10000)
         await page.wait_for_selector("select.form-control")
         select_elem = await page.query_selector("select.form-control")
@@ -110,7 +97,6 @@ async def _scrape_golbet724_page() -> Dict[str, Any] | None:
             odds_text = odds_el.get_text(strip=True)
             label = ["1", "X", "2"][i] if i < 3 else f"label_{i}"
             odds_data.append({"label": label, "odds": odds_text})
-        print(odds_data)
         nums.append(odds_data)
     return nums
 
@@ -118,7 +104,6 @@ async def fetch_golbet724_snapshots() -> List[MarketSnapshot]:
     """Fetch Golbet724 snapshots using Playwright scraping"""
 
     # Real scraping mode
-    print("[GOLBET] Starting Playwright scraping...")
     scraped_data = await _scrape_golbet724_page()
 
     return scraped_data
