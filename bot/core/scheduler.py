@@ -1,12 +1,8 @@
 from __future__ import annotations
 import os, asyncio, time
-from typing import List
-from datetime import datetime, timezone
 
-from .models import MarketSnapshot
-from .compare import find_opportunities, pct_change
 from .dedupe import DedupeCache
-from .notify import send_telegram, format_alert, format_ai_analysis_result
+from .notify import send_telegram, format_ai_analysis_result
 from .openai import compare
 
 SCAN_INTERVAL_SECONDS = int(os.getenv("SCAN_INTERVAL_SECONDS", "60"))
