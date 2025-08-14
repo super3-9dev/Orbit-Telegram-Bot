@@ -19,11 +19,42 @@ async def _scrape_golbet724_page() -> Dict[str, Any] | None:
 
         # Navigate to the actual page
         await page.goto("https://www.golbet724.com/maclar", wait_until="domcontentloaded")
-        await page.evaluate(
-            """(token) => { localStorage.setItem('auth_token', token); }""",
-            "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJodHRwOi8vc2NoZW1hcy54bWxzb2FwLm9yZy93cy8yMDA1LzA1L2lkZW50aXR5L2NsYWltcy9uYW1lIjoiMjc4MTgiLCJodHRwOi8vc2NoZW1hcy5taWNyb3NvZnQuY29tL3dzLzIwMDgvMDYvaWRlbnRpdHkvY2xhaW1zL3JvbGUiOiJBbHRCYXlpIiwiaHR0cDovL3NjaGVtYXMueG1sc29hcC5vcmcvd3MvMjAwNS8wNS9pZGVudGl0eS9jbGFpbXMvZ2l2ZW5uYW1lIjoiZGF5xLEyMSIsImh0dHA6Ly9zY2hlbWFzLm1pY3Jvc29mdC5jb20vd3MvMjAwOC8wNi9pZGVudGl0eS9jbGFpbXMvZ3JvdXBzaWQiOiIyNjgzMiIsImp0aSI6ImVhMDYyMDg1LWFkNzctNDZlNy04ODgwLTMzZWM3NjI0ODEwZSIsImV4cCI6MTc1NTEyNjI4MiwiaXNzIjoid3d3LnJpbzcyNC5jb20iLCJhdWQiOiJyaW83MjQuY29tIn0.MgGG1Mn7BSx05T9MqYGptPUayJ2wkUdv0fwJ8cglXxw",
-        )
-        await page.reload(wait_until="domcontentloaded")
+        
+        # Wait for the page to load and look for login form
+        await page.wait_for_timeout(2000)
+        
+        try:
+            # Look for login form elements
+            username_input = await page.query_selector('input[type="text"][placeholder="Username"]')
+            password_input = await page.query_selector('input[type="password"][placeholder="Password"]')
+            login_button = await page.query_selector('input[type="submit"][value="Login"]')
+            
+            if username_input and password_input and login_button:
+                print("[GOLBET] Login form found, attempting to login...")
+                
+                # Fill in the login credentials
+                await username_input.fill("dayı21")
+                await password_input.fill("123456")
+                
+                # Click the login button
+                await login_button.click()
+                
+                # Wait for login to complete
+                await page.wait_for_timeout(3000)
+                print("[GOLBET] Login attempt completed")
+                
+                # Check if login was successful by looking for authenticated content
+                try:
+                    await page.wait_for_selector("select.form-control", timeout=5000)
+                    print("[GOLBET] Login successful, authenticated content found")
+                except:
+                    print("[GOLBET] Warning: Login may have failed, continuing anyway...")
+            else:
+                print("[GOLBET] Login form not found, continuing without authentication...")
+                
+        except Exception as e:
+            print(f"[GOLBET] Login error: {e}, continuing without authentication...")
+        
         # Give the dynamic table time to render
         # Find the select element with class "form-control" and select the second option
         await page.wait_for_timeout(10000)
