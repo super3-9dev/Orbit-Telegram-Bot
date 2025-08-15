@@ -1,181 +1,200 @@
+#!/usr/bin/env python3
+"""
+Notification module for sending Telegram messages.
+"""
 
-from __future__ import annotations
 import os
 import httpx
-import json
+from typing import List, Dict, Optional
 from datetime import datetime
-import pytz
 
-# Read TZ at import; read token/chat at send-time to avoid empty values from early import
-TZ = os.getenv("TZ", "Asia/Tokyo")
+# Configuration
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
-def ts(dt) -> str:
-    try:
-        tz = pytz.timezone(TZ)
-        return dt.astimezone(tz).strftime("%Y-%m-%d %H:%M:%S %Z")
-    except Exception:
-        return dt.strftime("%Y-%m-%d %H:%M:%S")
-
-async def send_telegram(text: str):
-    bot_token = os.getenv("TELEGRAM_BOT_TOKEN", "")
-    chat_id = os.getenv("TELEGRAM_CHAT_ID", "")
-    if not bot_token or not chat_id:
-        print("[TELEGRAM DISABLED]", text)
-        return
-    url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
-    async with httpx.AsyncClient(timeout=10) as client:
-        await client.post(url, json={
-            "chat_id": chat_id,
-            "text": text,
-            "parse_mode": "HTML"  # Enable HTML formatting
-        })
-
-def format_alert(match_name: str, league: str|None, market: str, selection: str,
-                 orbit_odds: float, other_site: str, other_odds: float,
-                 detected_dt, kickoff_dt=None, diff_pct=None, diff_abs=None):
-    lines = []
-    lines.append("🚨 <b>ARBITRAGE SIGNAL DETECTED</b> 🚨")
-    lines.append("")
-    lines.append(f"⚽ <b>Match:</b> {match_name}")
-    if league:
-        lines.append(f"🏆 <b>League:</b> {league}")
-    lines.append(f"🎯 <b>Market:</b> {market} — {selection}")
-    lines.append("")
-    lines.append(f"📊 <b>Orbit LAY:</b> {orbit_odds:.2f}")
-    lines.append(f"📊 <b>{other_site.title()}:</b> {other_odds:.2f}")
-    if diff_abs is not None and diff_pct is not None:
-        lines.append(f"💰 <b>Difference:</b> {diff_abs:+.2f} ({diff_pct:+.2f}%)")
-    lines.append("")
-    lines.append(f"⏰ <b>Detected:</b> {ts(detected_dt)}")
-    if kickoff_dt:
-        lines.append(f"⚽ <b>Kickoff:</b> {ts(kickoff_dt)}")
-    return "\n".join(lines)
-
-def format_ai_analysis_result(ai_result: str, orbit_data, golbet_data) -> str:
+def format_alert(opportunity: Dict) -> str:
     """
-    Format the AI analysis result for Telegram with improved UI and clear array parsing
+    Format a single arbitrage opportunity alert.
+    
+    Args:
+        opportunity: Dictionary containing opportunity data
+        
+    Returns:
+        Formatted alert message
     """
     try:
-        # Clean the result string and try to parse JSON
-        cleaned_result = ai_result.strip()
-        if cleaned_result.startswith("```json"):
-            cleaned_result = cleaned_result[7:]
-        if cleaned_result.startswith("```"):
-            cleaned_result = cleaned_result[3:]
-        if cleaned_result.endswith("```"):
-            cleaned_result = cleaned_result[:-3]
+        match_name = opportunity.get('match_name', 'Unknown Match')
+        orbit_odds = opportunity.get('orbit_lay_odds', 'N/A')
+        comparison_odds = opportunity.get('comparison_odds', 'N/A')
+        odds_diff = opportunity.get('odds_difference', 'N/A')
+        market_type = opportunity.get('market_type', 'N/A')
+        detection_time = opportunity.get('detection_time', 'N/A')
         
-        cleaned_result = cleaned_result.strip()
-        opportunities = json.loads(cleaned_result)
+        message = f"""🎯 <b>ARBITRAGE OPPORTUNITY DETECTED!</b> 🎯
+
+⚽ <b>Match:</b> {match_name}
+🏟️ <b>Market:</b> {market_type}
+📊 <b>Orbit LAY:</b> {orbit_odds}
+📊 <b>Golbet:</b> {comparison_odds}
+💰 <b>Difference:</b> {odds_diff}
+⏰ <b>Detected:</b> {detection_time}
+
+💡 <b>How to Use:</b>
+   • <b>Lay</b> on Orbit at the LAY odds
+   • <b>Back</b> on Golbet at the comparison odds
+   • <b>Profit</b> from the odds difference
+
+🚀 <b>Happy arbitrage hunting!</b> 💰"""
         
-        # Header with beautiful styling
+        return message
+        
+    except Exception as e:
+        print(f"Error formatting alert: {e}")
+        return f"🎯 <b>ARBITRAGE OPPORTUNITY</b> 🎯\n\n{str(opportunity)}"
+
+def format_arbitrage_results(result: List[Dict], orbit_data: List[Dict], golbet_data: List[Dict]) -> str:
+    """
+    Format arbitrage opportunities results for the new Python-based system.
+    
+    Args:
+        result: List of arbitrage opportunities
+        orbit_data: Orbit market data
+        golbet_data: Golbet market data
+        
+    Returns:
+        Formatted message
+    """
+    try:
+        if not result or not isinstance(result, list) or len(result) == 0:
+            return "❌ No arbitrage opportunities found in this analysis cycle."
+        
         lines = []
-        lines.append("🎯 <b>ARBITRAGE OPPORTUNITIES REPORT</b> 🎯")
-        lines.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+        lines.append("🎯 <b>ARBITRAGE OPPORTUNITIES DETECTED!</b> 🎯")
         lines.append("")
         
-        # Analysis summary
-        lines.append("📊 <b>ANALYSIS SUMMARY</b>")
-        lines.append(f"⏰ <b>Time:</b> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-        lines.append(f"🔍 <b>Data Sources:</b>")
-        lines.append(f"   • Orbit: <code>{len(orbit_data)}</code> matches")
-        lines.append(f"   • Golbet: <code>{len(golbet_data)}</code> matches")
-        lines.append("")
-        lines.append("🎯 <b>FILTERING CRITERIA</b>")
-        lines.append("   • Percentage threshold: <code>-1% to +30%</code>")
-        lines.append("   • Only profitable opportunities within range")
+        lines.append(f"📊 <b>Analysis Summary:</b>")
+        lines.append(f"   • <b>Total Opportunities:</b> {len(result)}")
+        lines.append(f"   • <b>Threshold Applied:</b> -1% to +30%")
+        lines.append(f"   • <b>Data Sources:</b> Orbit + Golbet")
+        lines.append(f"   • <b>Matching Method:</b> Python-based (no AI)")
         lines.append("")
         
-        if isinstance(opportunities, list) and len(opportunities) > 0:
-            lines.append(f"💰 <b>FOUND {len(opportunities)} PROFITABLE OPPORTUNITIES</b> 💰")
-            lines.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-            lines.append("")
+        lines.append("⚽ <b>Opportunities Found:</b>")
+        lines.append("")
+        
+        for i, opp in enumerate(result, 1):
+            try:
+                match_name = opp.get('match_name', 'Unknown Match')
+                orbit_odds = opp.get('orbit_lay_odds', 'N/A')
+                comparison_odds = opp.get('comparison_odds', 'N/A')
+                odds_diff = opp.get('odds_difference', 'N/A')
+                market_type = opp.get('market_type', 'N/A')
+                detection_time = opp.get('detection_time', 'N/A')
+                
+                lines.append(f"<b>{i}. {match_name}</b>")
+                lines.append(f"   🏟️ <b>Market:</b> {market_type}")
+                lines.append(f"   📊 <b>Orbit LAY:</b> {orbit_odds}")
+                lines.append(f"   📊 <b>Golbet:</b> {comparison_odds}")
+                lines.append(f"   💰 <b>Difference:</b> {odds_diff}")
+                lines.append(f"   ⏰ <b>Detected:</b> {detection_time}")
+                
+                if i < len(result):
+                    lines.append("   ─────────────────────")
+                lines.append("")
+            except Exception as e:
+                print(f"Error formatting opportunity {i}: {e}")
+                continue
+        
+        lines.append("💡 <b>How to Use:</b>")
+        lines.append("   • <b>Lay</b> on Orbit at the LAY odds")
+        lines.append("   • <b>Back</b> on Golbet at the comparison odds")
+        lines.append("   • <b>Profit</b> from the odds difference")
+        lines.append("")
+        lines.append("🚀 <b>Happy arbitrage hunting!</b> 💰")
+        
+        return "\n".join(lines)
+        
+    except Exception as e:
+        print(f"Error formatting arbitrage results: {e}")
+        return f"""🎯 <b>ARBITRAGE OPPORTUNITIES</b> 🎯
+
+🤖 <b>Python Analysis Result:</b>
+{str(result)}
+
+⚠️ <b>Note:</b> Raw result displayed due to formatting error."""
+
+def format_ai_analysis_result(result, orbit_data, golbet_data):
+    """
+    Format AI analysis result into a clean, readable message.
+    This function is kept for backward compatibility but now calls the new function.
+    """
+    return format_arbitrage_results(result, orbit_data, golbet_data)
+
+async def send_telegram(message: str, chat_id: Optional[str] = None) -> bool:
+    """
+    Send a message to Telegram.
+    
+    Args:
+        message: Message to send
+        chat_id: Optional chat ID (if not provided, uses default)
+        
+    Returns:
+        True if successful, False otherwise
+    """
+    try:
+        if not TELEGRAM_BOT_TOKEN:
+            print("❌ TELEGRAM_BOT_TOKEN not set")
+            return False
+        
+        target_chat_id = chat_id or TELEGRAM_CHAT_ID
+        if not target_chat_id:
+            print("❌ No chat ID available")
+            return False
+        
+        url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+        
+        data = {
+            "chat_id": target_chat_id,
+            "text": message,
+            "parse_mode": "HTML"
+        }
+        
+        async with httpx.AsyncClient() as client:
+            response = await client.post(url, json=data, timeout=10)
             
-            for i, opp in enumerate(opportunities, 1):
-                # Opportunity header
-                lines.append(f"🎯 <b>OPPORTUNITY {i}</b>")
-                lines.append("")
+            if response.status_code == 200:
+                print(f"✅ Telegram message sent successfully to {target_chat_id}")
+                return True
+            else:
+                print(f"❌ Failed to send Telegram message: {response.status_code} - {response.text}")
+                return False
                 
-                # Match details
-                lines.append(f"⚽ <b>Match:</b> <code>{opp.get('match_name', 'Unknown Match')}</code>")
-                lines.append(f"🎲 <b>Market:</b> <code>{opp.get('market_type', '1X2')}</code>")
-                lines.append("")
-                
-                # Odds comparison
-                lines.append("📊 <b>ODDS COMPARISON</b>")
-                orbit_odds = opp.get('orbit_lay_odds', 0)
-                golbet_odds = opp.get('comparison_odds', 0)
-                lines.append(f"   🔴 <b>Orbit LAY:</b> <code>{orbit_odds:.2f}</code>")
-                lines.append(f"   🟢 <b>Golbet:</b> <code>{golbet_odds:.2f}</code>")
-                lines.append("")
-                
-                # Profit analysis
-                lines.append("💵 <b>PROFIT ANALYSIS</b>")
-                odds_diff_str = opp.get('odds_difference', '0.00 (0.00%)')
-                lines.append(f"   💰 <b>Difference:</b> <code>{odds_diff_str}</code>")
-                
-                # Calculate and show profit potential with threshold compliance
-                if orbit_odds > 0 and golbet_odds > 0:
-                    diff_abs = golbet_odds - orbit_odds
-                    diff_percentage = (diff_abs / orbit_odds) * 100
-                    
-                    # Show threshold compliance
-                    if -1 <= diff_percentage <= 30:
-                        lines.append(f"   ✅ <b>Threshold Status:</b> <code>WITHIN RANGE</code>")
-                        if diff_percentage > 0:
-                            lines.append(f"   💚 <b>Profit Potential:</b> <code>+{diff_abs:.2f} (+{diff_percentage:.2f}%)</code>")
-                        else:
-                            lines.append(f"   🟡 <b>Risk Level:</b> <code>{diff_abs:.2f} ({diff_percentage:.2f}%)</code>")
-                    else:
-                        lines.append(f"   ❌ <b>Threshold Status:</b> <code>OUTSIDE RANGE</code>")
-                        lines.append(f"   ⚠️ <b>Filtered Out:</b> <code>{diff_percentage:.2f}% not in -1% to +30%</code>")
-                
-                lines.append("")
-                lines.append(f"⏰ <b>Detected:</b> <code>{opp.get('detection_time', 'N/A')}</code>")
-                
-                # Add separator between opportunities
-                if i < len(opportunities):
-                    lines.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-                    lines.append("")
-        
-        else:
-            lines.append("❌ <b>NO ARBITRAGE OPPORTUNITIES FOUND</b> ❌")
-            lines.append("")
-            lines.append("📋 <b>Possible Reasons:</b>")
-            lines.append("   • No opportunities within -1% to +30% threshold")
-            lines.append("   • All differences are outside the acceptable range")
-            lines.append("   • Market conditions are unfavorable")
-            lines.append("   • Data quality issues")
-            lines.append("   • All odds are properly aligned")
-            lines.append("")
-            lines.append("💡 <b>Threshold Reminder:</b>")
-            lines.append("   • Only opportunities with -1% ≤ difference ≤ +30%")
-            lines.append("   • This ensures manageable risk levels")
-            lines.append("   • Prevents extreme arbitrage situations")
-        
-        # Footer with status
-        lines.append("")
-        lines.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-        lines.append("⚡ <b>Real-time monitoring active</b>")
-        lines.append("🎯 <b>Threshold filtering: -1% to +30%</b>")
-        lines.append("🔄 <b>Next scan in 60 seconds</b>")
-        
-        return "\n".join(lines)
-        
-    except json.JSONDecodeError as e:
-        # If JSON parsing fails, return a formatted version of the raw result
-        lines = []
-        lines.append("⚠️ <b>AI ANALYSIS PARSE ERROR</b> ⚠️")
-        lines.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-        lines.append("")
-        lines.append("🔍 <b>Raw AI Response:</b>")
-        lines.append(f"<code>{ai_result}</code>")
-        lines.append("")
-        lines.append("❌ <b>Error Details:</b>")
-        lines.append(f"<code>{str(e)}</code>")
-        lines.append("")
-        lines.append("💡 <b>Suggestions:</b>")
-        lines.append("   • Check AI response format")
-        lines.append("   • Verify JSON structure")
-        lines.append("   • Review prompt instructions")
-        return "\n".join(lines)
+    except Exception as e:
+        print(f"❌ Error sending Telegram message: {e}")
+        return False
+
+async def broadcast_to_users(message: str, user_ids: List[str]) -> None:
+    """
+    Send a message to multiple users.
+    
+    Args:
+        message: Message to send
+        user_ids: List of user IDs to send to
+    """
+    if not user_ids:
+        print("⚠️ No users to broadcast to")
+        return
+    
+    print(f"📢 Broadcasting message to {len(user_ids)} users...")
+    
+    success_count = 0
+    for user_id in user_ids:
+        try:
+            if await send_telegram(message, user_id):
+                success_count += 1
+            else:
+                print(f"❌ Failed to send to user {user_id}")
+        except Exception as e:
+            print(f"❌ Error sending to user {user_id}: {e}")
+    
+    print(f"📢 Broadcast completed: {success_count}/{len(user_ids)} successful")

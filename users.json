@@ -1,0 +1,23 @@
+{
+  "users": [
+    7894465924,
+    7288345422
+  ],
+  "user_data": {
+    "7288345422": {
+      "registered_at": "2025-08-14T07:58:04.939714",
+      "username": "super3dev9star",
+      "first_name": "Super&Dev&Star",
+      "last_notification": null,
+      "total_notifications": 0
+    },
+    "7894465924": {
+      "registered_at": "2025-08-14T08:17:21.128353",
+      "username": "mahsun7272",
+      "first_name": "bilal",
+      "last_notification": "2025-08-14T08:47:47.298557",
+      "total_notifications": 13
+    }
+  },
+  "last_updated": "2025-08-14T08:49:17.960954"
+}
